@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juego Cronológico de Fredonia</title>
+    <!-- CARGA DE TAILWIND CSS: Mantenemos el método estándar, pero aseguramos la etiqueta. -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
         /* Estilos personalizados para Drag and Drop */
         .draggable {
@@ -25,12 +27,11 @@
             background-color: #d1fae5; /* Tailwind green-100 */
             border-color: #10b981; /* Tailwind green-500 */
         }
+        /* Clases de retroalimentación visual (se añaden y remueven dinámicamente) */
         .correct {
-            background-color: #d1fae5; /* green-100 */
             border-left: 5px solid #10b981; /* green-500 */
         }
         .incorrect {
-            background-color: #fee2e2; /* red-100 */
             border-left: 5px solid #ef4444; /* red-500 */
         }
     </style>
@@ -78,10 +79,11 @@
                 <!-- Mensajes del juego -->
             </div>
         </footer>
-
+        
     </div>
 
     <script>
+        // Array de hechos históricos con un ID único y un año para el ordenamiento
         const facts = [
             { id: 1, year: 1776, text: "En 1776, la libertadora Javiera Londoño liberó a más de cien esclavos en El Retiro, un hecho precursor de la abolición en Colombia." },
             { id: 2, year: 1830.1, text: "Hacia 1830, el ingeniero inglés Tyrell Moore sugirió el nombre 'Fredonia' (tierra de hombres libres) por la mina de oro El Zancudo." },
@@ -95,17 +97,31 @@
             { id: 10, year: 2012, text: "En 2012, Luis Fernando Rodríguez (Chacho) regresó a Fredonia y fundó el Conjunto Musical Cerro Bravo." }
         ];
 
-        // Se usa una copia de los hechos para desordenar
         let currentFacts = [...facts];
         
         // El orden correcto es la lista original ordenada por 'year'
         const correctOrderIds = facts.sort((a, b) => a.year - b.year).map(f => f.id);
 
-        const draggableList = document.getElementById('draggable-list');
-        const dropzoneList = document.getElementById('dropzone-list');
-        const messageBox = document.getElementById('message-box');
-        
+        let draggableList, dropzoneList, messageBox;
         let draggedItem = null;
+
+        /**
+         * Inicializa los elementos DOM después de la carga completa de la página.
+         */
+        function initDOM() {
+            draggableList = document.getElementById('draggable-list');
+            dropzoneList = document.getElementById('dropzone-list');
+            messageBox = document.getElementById('message-box');
+
+            if (!draggableList || !dropzoneList || !messageBox) {
+                console.error("Error: No se encontraron todos los elementos DOM. El juego no puede inicializarse.");
+                // Puedes añadir un mensaje visible al usuario aquí si quieres
+                return;
+            }
+
+            // Iniciar el juego
+            initializeGame();
+        }
 
         /**
          * Inicializa o reinicia el juego.
@@ -132,7 +148,7 @@
             // 4. Configurar eventos Drag and Drop
             setupDragAndDropEvents();
             
-            // 5. Limpiar mensajes
+            // 5. Limpiar y mostrar mensaje inicial
             showMessage("¡Organiza los 10 eventos!", 'bg-blue-100 text-blue-700');
         }
 
@@ -155,15 +171,18 @@
          */
         function createDropzone(number) {
             const div = document.createElement('div');
-            div.className = 'dropzone p-2 border-2 border-dashed border-indigo-400 rounded-lg bg-white relative';
+            // Usamos flex-col y relative para la etiqueta de posición
+            div.className = 'dropzone p-2 border-2 border-dashed border-indigo-400 rounded-lg bg-white relative flex flex-col justify-center'; 
             div.dataset.position = number;
             
             const label = document.createElement('span');
-            label.className = 'absolute top-[-0.5rem] left-2 px-1 text-xs font-semibold text-indigo-600 bg-white rounded';
-            label.textContent = `Posición ${number}`;
+            // Ajuste el estilo de la etiqueta para que sea más visible
+            label.className = 'absolute top-[-0.6rem] left-2 px-2 text-xs font-bold text-indigo-700 bg-white border border-indigo-400 rounded-full shadow-sm';
+            label.textContent = `${number}° Evento`;
             
             const content = document.createElement('div');
-            content.className = 'dropzone-content min-h-[2rem] flex items-center justify-center text-gray-500 italic text-sm';
+            // Establecer una altura mínima y centrar el texto de placeholder
+            content.className = 'dropzone-content min-h-[3rem] flex items-center justify-center text-gray-400 italic text-sm';
             content.textContent = 'Arrastra un hecho aquí...';
             
             div.appendChild(label);
@@ -182,19 +201,22 @@
             draggables.forEach(draggable => {
                 draggable.addEventListener('dragstart', (e) => {
                     draggedItem = draggable;
-                    e.dataTransfer.setData('text/plain', draggable.dataset.id);
+                    // Se usa dataTransfer para pasar el ID del hecho
+                    e.dataTransfer.setData('text/plain', draggable.dataset.id); 
                     setTimeout(() => draggable.classList.add('dragging'), 0);
                 });
                 draggable.addEventListener('dragend', () => {
-                    draggedItem.classList.remove('dragging');
-                    draggedItem = null;
+                    if (draggedItem) {
+                        draggedItem.classList.remove('dragging');
+                        draggedItem = null;
+                    }
                 });
             });
 
             // Listeners para zonas de soltar
             dropzones.forEach(dropzone => {
                 dropzone.addEventListener('dragover', (e) => {
-                    e.preventDefault(); // Permite el soltar
+                    e.preventDefault(); 
                     dropzone.classList.add('drag-over');
                 });
                 dropzone.addEventListener('dragleave', () => {
@@ -210,18 +232,26 @@
                     if (itemToMove) {
                         const contentContainer = dropzone.querySelector('.dropzone-content');
                         
-                        // 1. Mueve el elemento arrastrado a la dropzone
-                        contentContainer.innerHTML = '';
+                        // Si la zona ya tiene un hecho, devolverlo a la lista desordenada
+                        if (contentContainer.querySelector('.draggable')) {
+                            const currentFact = contentContainer.querySelector('.draggable');
+                            // Revertir clases para que se pueda arrastrar de nuevo
+                            currentFact.className = 'draggable bg-white p-3 rounded-lg border border-gray-300 shadow-sm text-sm text-gray-800 hover:shadow-md';
+                            currentFact.setAttribute('draggable', true);
+                            draggableList.appendChild(currentFact);
+                        }
+                        
+                        // Mueve el nuevo elemento arrastrado a la dropzone
+                        contentContainer.innerHTML = ''; // Limpia el contenido (incluyendo el placeholder)
+                        
+                        // Establece el estilo para el elemento colocado
+                        itemToMove.className = 'draggable p-2 rounded-lg bg-indigo-100 text-sm font-medium text-indigo-800 shadow-inner w-full';
+                        itemToMove.setAttribute('draggable', true); // Permitimos arrastrarlo de nuevo si se equivocan
+                        
                         contentContainer.appendChild(itemToMove);
                         
-                        // 2. Ajusta el estilo y deshabilita drag de la dropzone
-                        itemToMove.className = 'p-2 rounded-lg bg-indigo-100 text-sm font-medium text-indigo-800 shadow-inner';
-                        itemToMove.setAttribute('draggable', false);
-                        
-                        // 3. Quitar el texto de placeholder de la dropzone
-                        contentContainer.classList.remove('italic', 'text-gray-500', 'justify-center');
-                        contentContainer.textContent = ''; // Limpia el placeholder
-                        contentContainer.appendChild(itemToMove);
+                        // Quitar el texto de placeholder de la dropzone
+                        contentContainer.textContent = ''; 
                     }
                 });
             });
@@ -237,21 +267,25 @@
 
             dropzones.forEach((dropzone, index) => {
                 const factElement = dropzone.querySelector('.draggable');
+                
+                // Limpiar clases de retroalimentación
                 dropzone.classList.remove('correct', 'incorrect');
 
                 if (factElement) {
                     const droppedId = parseInt(factElement.dataset.id);
                     const expectedId = correctOrderIds[index];
 
+                    // Reiniciar clases de color
+                    factElement.classList.remove('bg-green-200', 'text-green-800', 'bg-red-200', 'text-red-800');
+                    factElement.classList.add('bg-indigo-100', 'text-indigo-800'); // Estilo base
+                    
                     if (droppedId === expectedId) {
                         dropzone.classList.add('correct');
                         factElement.classList.add('bg-green-200', 'text-green-800');
-                        factElement.classList.remove('bg-indigo-100', 'text-indigo-800');
                         correctCount++;
                     } else {
                         dropzone.classList.add('incorrect');
                         factElement.classList.add('bg-red-200', 'text-red-800');
-                        factElement.classList.remove('bg-indigo-100', 'text-indigo-800');
                     }
                 } else {
                     allFilled = false;
@@ -263,7 +297,7 @@
             } else if (correctCount === 10) {
                 showMessage("¡Felicidades! ¡Orden cronológico perfecto!", 'bg-green-100 text-green-700');
             } else {
-                showMessage(`Resultado: ${correctCount}/10 correctos. Revisa los marcados en rojo.`, 'bg-red-100 text-red-700');
+                showMessage(`Resultado: ${correctCount}/10 correctos. Revisa los marcados con borde rojo.`, 'bg-red-100 text-red-700');
             }
         }
 
@@ -276,8 +310,6 @@
 
         /**
          * Muestra un mensaje en el área de resultados.
-         * @param {string} msg - El mensaje a mostrar.
-         * @param {string} classes - Clases de Tailwind para el estilo del mensaje.
          */
         function showMessage(msg, classes) {
             messageBox.className = `md:min-w-[200px] p-3 rounded-lg text-center font-medium shadow-md ${classes}`;
@@ -286,7 +318,6 @@
 
         /**
          * Función para barajar un array (Algoritmo de Fisher-Yates).
-         * @param {Array} array - El array a barajar.
          */
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
@@ -295,8 +326,8 @@
             }
         }
 
-        // Iniciar el juego al cargar la página
-        window.onload = initializeGame;
+        // Usar window.onload para asegurar que el DOM esté completamente cargado antes de inicializar.
+        window.onload = initDOM;
     </script>
 </body>
 </html>
