@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego Cronológico de Fredonia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para Drag and Drop */
+        .draggable {
+            cursor: grab;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .draggable:active {
+            cursor: grabbing;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .dragging {
+            opacity: 0.5;
+        }
+        .dropzone {
+            min-height: 5rem;
+        }
+        .dropzone.drag-over {
+            background-color: #d1fae5; /* Tailwind green-100 */
+            border-color: #10b981; /* Tailwind green-500 */
+        }
+        .correct {
+            background-color: #d1fae5; /* green-100 */
+            border-left: 5px solid #10b981; /* green-500 */
+        }
+        .incorrect {
+            background-color: #fee2e2; /* red-100 */
+            border-left: 5px solid #ef4444; /* red-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans p-4 md:p-8 min-h-screen flex items-center justify-center">
+
+    <div id="app" class="w-full max-w-5xl bg-white shadow-2xl rounded-xl p-6 md:p-10 border-t-8 border-indigo-600">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-indigo-700 tracking-tight">
+                ⏳ Reto Cronológico: La Historia de Fredonia
+            </h1>
+            <p class="text-gray-600 mt-2 text-lg">Arrastra los hechos históricos al panel derecho para ordenarlos cronológicamente (del más antiguo al más reciente).</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Columna de Hechos Desordenados -->
+            <div class="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Hechos Desordenados</h2>
+                <div id="draggable-list" class="space-y-3">
+                    <!-- Los elementos se insertarán aquí por JS -->
+                </div>
+            </div>
+
+            <!-- Columna de Orden Cronológico (Zona de Soltar) -->
+            <div class="space-y-4 p-4 border border-indigo-300 rounded-lg bg-indigo-50">
+                <h2 class="text-xl font-semibold text-indigo-700 mb-4">Orden Cronológico (1 al 10)</h2>
+                <div id="dropzone-list" class="space-y-3">
+                    <!-- La lista de 10 dropzones se insertará aquí por JS -->
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Controles y Resultados -->
+        <footer class="mt-8 pt-6 border-t border-gray-200 flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
+            <button id="check-button" onclick="checkOrder()" class="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow-lg">
+                Verificar Orden
+            </button>
+            <button id="reset-button" onclick="resetGame()" class="bg-red-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-red-600 transition shadow-lg">
+                Reiniciar Juego
+            </button>
+            <div id="message-box" class="md:min-w-[200px] p-3 rounded-lg text-center font-medium shadow-md">
+                <!-- Mensajes del juego -->
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        const facts = [
+            { id: 1, year: 1776, text: "En 1776, la libertadora Javiera Londoño liberó a más de cien esclavos en El Retiro, un hecho precursor de la abolición en Colombia." },
+            { id: 2, year: 1830.1, text: "Hacia 1830, el ingeniero inglés Tyrell Moore sugirió el nombre 'Fredonia' (tierra de hombres libres) por la mina de oro El Zancudo." },
+            { id: 3, year: 1830.2, text: "El 2 de octubre de 1830 se decretó la fundación oficial de Fredonia en el sitio donado por Cristóbal Uribe Mondragón." },
+            { id: 4, year: 1830.3, text: "Un mes después de la fundación (noviembre de 1830), se erigió la parroquia con el nombre de 'Santa Ana de Fredonia' por decreto eclesiástico." },
+            { id: 5, year: 1730, text: "A mediados de la década de 1730, el café fue introducido en Colombia desde Europa, ayudando a la posterior economía regional." },
+            { id: 6, year: 1898, text: "Cerca de 1898, el café ya representaba el 50% de las ventas externas del país, siendo Fredonia una zona productora clave." },
+            { id: 7, year: 1900.1, text: "Mariano Ospina Rodríguez comenzó a experimentar con granos de café, concluyendo que los suelos de Fredonia eran óptimos para el cultivo." },
+            { id: 8, year: 1950, text: "Durante buena parte del siglo XX, las tierras de Fredonia ocuparon el primer puesto de producción cafetera en Colombia." },
+            { id: 9, year: 1989, text: "En 1989, la caída de los precios del café afectó la economía local, impulsando la búsqueda de alternativas económicas." },
+            { id: 10, year: 2012, text: "En 2012, Luis Fernando Rodríguez (Chacho) regresó a Fredonia y fundó el Conjunto Musical Cerro Bravo." }
+        ];
+
+        // Se usa una copia de los hechos para desordenar
+        let currentFacts = [...facts];
+        
+        // El orden correcto es la lista original ordenada por 'year'
+        const correctOrderIds = facts.sort((a, b) => a.year - b.year).map(f => f.id);
+
+        const draggableList = document.getElementById('draggable-list');
+        const dropzoneList = document.getElementById('dropzone-list');
+        const messageBox = document.getElementById('message-box');
+        
+        let draggedItem = null;
+
+        /**
+         * Inicializa o reinicia el juego.
+         */
+        function initializeGame() {
+            currentFacts = [...facts];
+            // 1. Barajar la lista de hechos
+            shuffleArray(currentFacts);
+
+            // 2. Limpiar e inyectar hechos arrastrables
+            draggableList.innerHTML = '';
+            currentFacts.forEach(fact => {
+                const item = createDraggableItem(fact);
+                draggableList.appendChild(item);
+            });
+
+            // 3. Limpiar e inyectar las zonas de soltar
+            dropzoneList.innerHTML = '';
+            for (let i = 0; i < 10; i++) {
+                const dropzone = createDropzone(i + 1);
+                dropzoneList.appendChild(dropzone);
+            }
+
+            // 4. Configurar eventos Drag and Drop
+            setupDragAndDropEvents();
+            
+            // 5. Limpiar mensajes
+            showMessage("¡Organiza los 10 eventos!", 'bg-blue-100 text-blue-700');
+        }
+
+        /**
+         * Crea un elemento arrastrable (hecho).
+         * @param {object} fact - El objeto hecho.
+         */
+        function createDraggableItem(fact) {
+            const div = document.createElement('div');
+            div.className = 'draggable bg-white p-3 rounded-lg border border-gray-300 shadow-sm text-sm text-gray-800 hover:shadow-md';
+            div.setAttribute('draggable', true);
+            div.dataset.id = fact.id;
+            div.textContent = fact.text;
+            return div;
+        }
+
+        /**
+         * Crea una zona de soltar numerada.
+         * @param {number} number - El número de la posición cronológica.
+         */
+        function createDropzone(number) {
+            const div = document.createElement('div');
+            div.className = 'dropzone p-2 border-2 border-dashed border-indigo-400 rounded-lg bg-white relative';
+            div.dataset.position = number;
+            
+            const label = document.createElement('span');
+            label.className = 'absolute top-[-0.5rem] left-2 px-1 text-xs font-semibold text-indigo-600 bg-white rounded';
+            label.textContent = `Posición ${number}`;
+            
+            const content = document.createElement('div');
+            content.className = 'dropzone-content min-h-[2rem] flex items-center justify-center text-gray-500 italic text-sm';
+            content.textContent = 'Arrastra un hecho aquí...';
+            
+            div.appendChild(label);
+            div.appendChild(content);
+            return div;
+        }
+        
+        /**
+         * Configura los listeners para Drag and Drop.
+         */
+        function setupDragAndDropEvents() {
+            const draggables = document.querySelectorAll('.draggable');
+            const dropzones = document.querySelectorAll('.dropzone');
+
+            // Listeners para elementos arrastrables
+            draggables.forEach(draggable => {
+                draggable.addEventListener('dragstart', (e) => {
+                    draggedItem = draggable;
+                    e.dataTransfer.setData('text/plain', draggable.dataset.id);
+                    setTimeout(() => draggable.classList.add('dragging'), 0);
+                });
+                draggable.addEventListener('dragend', () => {
+                    draggedItem.classList.remove('dragging');
+                    draggedItem = null;
+                });
+            });
+
+            // Listeners para zonas de soltar
+            dropzones.forEach(dropzone => {
+                dropzone.addEventListener('dragover', (e) => {
+                    e.preventDefault(); // Permite el soltar
+                    dropzone.classList.add('drag-over');
+                });
+                dropzone.addEventListener('dragleave', () => {
+                    dropzone.classList.remove('drag-over');
+                });
+                dropzone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropzone.classList.remove('drag-over');
+                    
+                    const factId = e.dataTransfer.getData('text/plain');
+                    const itemToMove = document.querySelector(`.draggable[data-id="${factId}"]`);
+                    
+                    if (itemToMove) {
+                        const contentContainer = dropzone.querySelector('.dropzone-content');
+                        
+                        // 1. Mueve el elemento arrastrado a la dropzone
+                        contentContainer.innerHTML = '';
+                        contentContainer.appendChild(itemToMove);
+                        
+                        // 2. Ajusta el estilo y deshabilita drag de la dropzone
+                        itemToMove.className = 'p-2 rounded-lg bg-indigo-100 text-sm font-medium text-indigo-800 shadow-inner';
+                        itemToMove.setAttribute('draggable', false);
+                        
+                        // 3. Quitar el texto de placeholder de la dropzone
+                        contentContainer.classList.remove('italic', 'text-gray-500', 'justify-center');
+                        contentContainer.textContent = ''; // Limpia el placeholder
+                        contentContainer.appendChild(itemToMove);
+                    }
+                });
+            });
+        }
+
+        /**
+         * Verifica si el orden de los hechos en las dropzones es el correcto.
+         */
+        function checkOrder() {
+            let correctCount = 0;
+            const dropzones = document.querySelectorAll('.dropzone');
+            let allFilled = true;
+
+            dropzones.forEach((dropzone, index) => {
+                const factElement = dropzone.querySelector('.draggable');
+                dropzone.classList.remove('correct', 'incorrect');
+
+                if (factElement) {
+                    const droppedId = parseInt(factElement.dataset.id);
+                    const expectedId = correctOrderIds[index];
+
+                    if (droppedId === expectedId) {
+                        dropzone.classList.add('correct');
+                        factElement.classList.add('bg-green-200', 'text-green-800');
+                        factElement.classList.remove('bg-indigo-100', 'text-indigo-800');
+                        correctCount++;
+                    } else {
+                        dropzone.classList.add('incorrect');
+                        factElement.classList.add('bg-red-200', 'text-red-800');
+                        factElement.classList.remove('bg-indigo-100', 'text-indigo-800');
+                    }
+                } else {
+                    allFilled = false;
+                }
+            });
+
+            if (!allFilled) {
+                showMessage("Aún faltan hechos por colocar. ¡Arrastra los 10!", 'bg-yellow-100 text-yellow-700');
+            } else if (correctCount === 10) {
+                showMessage("¡Felicidades! ¡Orden cronológico perfecto!", 'bg-green-100 text-green-700');
+            } else {
+                showMessage(`Resultado: ${correctCount}/10 correctos. Revisa los marcados en rojo.`, 'bg-red-100 text-red-700');
+            }
+        }
+
+        /**
+         * Reinicia el juego completamente.
+         */
+        function resetGame() {
+            initializeGame();
+        }
+
+        /**
+         * Muestra un mensaje en el área de resultados.
+         * @param {string} msg - El mensaje a mostrar.
+         * @param {string} classes - Clases de Tailwind para el estilo del mensaje.
+         */
+        function showMessage(msg, classes) {
+            messageBox.className = `md:min-w-[200px] p-3 rounded-lg text-center font-medium shadow-md ${classes}`;
+            messageBox.textContent = msg;
+        }
+
+        /**
+         * Función para barajar un array (Algoritmo de Fisher-Yates).
+         * @param {Array} array - El array a barajar.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // Iniciar el juego al cargar la página
+        window.onload = initializeGame;
+    </script>
+</body>
+</html>
